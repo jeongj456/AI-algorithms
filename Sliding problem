@@ -4,6 +4,7 @@ Sliding Problem for AI-Class
 '''
 
 import random
+from collections import deque
 
 class State:
     """ State of sliding number puzzle
@@ -67,3 +68,358 @@ class State:
                     self.position = [row, col]
                     return None
         raise StandardError('Set board configuration does not have an empty spot!')
+
+
+
+
+
+class Node:
+    """
+    Represents a node in a search tree.
+
+    Attributes:
+    - p: The parent node.
+    - a: The action that led to this node from the parent.
+    - c: The cost associated with reaching this node.
+    - s: The state represented by this node.
+    - d: The depth of this node in the search tree.
+    """
+    nodeCount = 0
+
+    def __init__(self, p, a, c, s, d):
+
+        #keep track of how many nodes were created
+        self.__class__.nodeCount += 1
+        self.nodeID = self.nodeCount
+
+        self.parent = p
+        self.action = a
+        self.cost = c
+        self.state = s
+        self.depth = d
+
+    def __lt__(self, other):
+        # self < other
+        return self.depth + calculate_h(self.state.toTuple()) < other.depth + calculate_h(other.state.toTuple())
+
+    def __str__(self):
+        rstr = 'NodeID: ' + str(self.nodeID) + '\n'
+        if self.parent != None:
+            rstr += 'Parent: ' + str(self.parent.nodeID) + '\n'
+        if self.action != None:
+            rstr += 'Action: ' + self.action  + '\n'
+        rstr += 'Cost:   ' + str(self.cost) + '\n'
+        rstr += 'State:\n' + str(self.state)
+        return rstr
+
+# creates and returns a new node which would be child of current node n being passed to the function
+def childNode(n, action, problem, d):
+    return Node(n,action, n.cost + 1, problem.apply(action,State(n.state)), d)
+
+goal_position = {}
+idx = 0
+for i in range(3):
+    for j in range(3):
+        goal_position[(i, j)] = idx
+        idx += 1
+
+def calculate_h(state_tuple):
+    # arg should be passed as state.toTuple()
+    # goal_position = { (0, 0): 0, (0, 1): 1, (0, 2): 2, (1, 0): 3 ... (3, 3): 8 }
+    # calculating H by how many numbers are not in the right spot
+    # calculate G = number of nodes moved from initial state (generally going to be +1 for each successor node)
+    h = 0
+    for i in range(3):
+        for j in range(3):
+            if state_tuple[i][j] != goal_position[(i, j)]:
+                h += 1
+    return h
+
+
+
+class Problem:
+    """
+    Class that defines a search problem.
+
+    Attributes:
+    - actions (list): A list of possible actions in the problem.
+    - initialState: The initial state of the problem.
+    - goalState: The goal state that the search is trying to reach.
+    """
+
+    def __init__(self):
+        self.actions = ['U','L','D','R']
+        self.initialState = 0
+        self.goalState = 0
+
+    def apply(self, a, s):
+
+        #positions after move, still refers to s.position object
+        post = s.position
+
+        #make a copy
+        pre = list(post)
+
+        #compute post position
+        if a == 'U':
+            post[0] = max(pre[0] - 1, 0)
+        elif a == 'L':
+            post[1] = max(pre[1] - 1, 0)
+        elif a == 'D':
+            post[0] = min(pre[0] + 1, s.boardSize - 1)
+        elif a == 'R':
+            post[1] = min(pre[1] + 1, s.boardSize - 1)
+        else:
+            print('Undefined action: ' + str(a))
+            raise StandardError('Action not defined for this problem!')
+
+        #store the old tile to slide/swap the tiles
+        tile = s.board[pre[0]][pre[1]]
+
+        s.board[pre[0]][pre[1]] = s.board[post[0]][post[1]]
+        s.board[post[0]][post[1]] = tile
+
+#       print (pre, ' ', post,' ',s.board[pre[0]][pre[1]] , '<--', s.board[post[0]][post[1]])
+
+        return s
+
+    def applicable(self, s):
+        actionList = []
+
+        #check if actions are applicable
+        #Not in top row
+        if s.position[0] > 0:
+            actionList.append('U')
+
+        #not in left most col
+        if s.position[1] > 0:
+            actionList.append('L')
+
+        #not in bottom row
+        if s.position[0] < (s.boardSize - 1):
+            actionList.append('D')
+
+        #not in right col
+        if s.position[1] < (s.boardSize - 1):
+            actionList.append('R')
+
+        return actionList
+
+    #test if currect state is goal state or not
+    def goalTest(self, s):
+        return self.goalState == s
+
+def applyRndMoves(numMoves, s, p):
+    for i in range(numMoves):
+        p.apply(p.actions[random.randint(0,3)], s)
+
+def solution(node):
+    ''' Returns actionList, cost of the solution generated from the node'''
+
+    actions = []
+    cost = node.cost
+
+    while node.parent != None:
+        actions.insert(0,node.action)
+        node = node.parent
+
+    return actions, cost
+
+
+
+class Searches:
+#each move L,R,U,D is considered a child node/layer down
+    def BFS(self, problem):
+      depth = 0
+      root_node = Node(None, None, calculate_h(problem.initialState.toTuple()), problem.initialState, depth)
+      visited = []
+      queue = deque()
+      queue.append(root_node)
+      queue.append(None)
+      while queue:
+        node = queue.popleft()
+        if node == None:
+          if len(queue) == 0:
+            break
+          depth += 1
+          queue.append(None)
+          continue
+        if problem.goalTest(node.state):
+          return solution(node)
+        actionlist = problem.applicable(node.state)
+        for action in actionlist:
+          cn = childNode(node, action, problem, depth)
+          if cn.state not in visited:
+            queue.append(cn)
+        visited.append(node)
+
+    def DFS(self, problem):
+      visited = []
+      stack = []
+      stack.append(Node(None, None, calculate_h(problem.initialState.toTuple()), problem.initialState, 0))
+      while stack:
+        node = stack.pop()
+        if node.depth > 15:
+          return None
+        if problem.goalTest(node.state):
+          return solution(node)
+        if node not in visited:
+          visited.append(node)
+        actionlist = problem.applicable(node.state)
+        for action in actionlist:
+          stack.append(childNode(node, action, problem, (node.depth+1)))
+
+
+    def A_star(self, problem):
+      def childNode(n, action, problem, d):
+        s = problem.apply(action,State(n.state))
+        return Node(n,action, calculate_h(tuple(s.board)), s, d)
+
+      node = Node(None, None, calculate_h(problem.initialState.toTuple()), problem.initialState, 0)
+      while problem.goalTest(node.state) == False:
+        mincn = None
+        actionlist = problem.applicable(node.state)
+        count = 0
+        for action in actionlist:
+          count += 1
+          cn = childNode(node, action, problem, node.depth+1)
+          if mincn == None:
+            mincn = cn
+          elif (cn.cost + (node.depth+1)) < (mincn.cost + (node.depth+1)):
+            mincn = cn
+          elif count == len(actionlist) and (cn.cost + (node.depth+1)) == (mincn.cost + (node.depth+1)):
+            mincncn = 100
+            cncn = 100
+            mincnal = problem.applicable(mincn.state)
+            cnal = problem.applicable(cn.state)
+            for a in mincnal:
+              minn = childNode(mincn, a, problem, (mincn.depth + 1))
+              if minn.cost < mincncn:
+                mincncn = minn.cost
+            for b in cncn:
+              bn = childNode(cn, b, problem, (cn.depth+1))
+              if bn.cost < cncn:
+                cncn = bn.cost
+            if cncn < mincncn:
+              node = cncn
+            node = mincncn
+
+
+        node = mincn
+
+      return solution(node)
+
+
+    def greedy(self, problem):
+
+      def childNode(n, action, problem, d):
+        s = problem.apply(action,State(n.state))
+        return Node(n,action, calculate_h(tuple(s.board)), s, d)
+
+      node = Node(None, None, calculate_h(problem.initialState.toTuple()), problem.initialState, 0)
+      while problem.goalTest(node.state)==False:
+        mincn = None
+        actionlist = problem.applicable(node.state)
+        for action in actionlist:
+          cn = childNode(node, action, problem, node.depth+1)
+          if mincn == None:
+            mincn = cn
+          elif cn.cost < mincn.cost:
+            mincn = cn
+        node = mincn
+      return solution(node)
+
+
+
+import time
+if __name__ == '__main__':
+
+    search = Searches()
+
+    p = Problem()
+    s = State()
+
+    p.goalState = State(s)
+
+    p.apply('R', s)
+    p.apply('R', s)
+    p.apply('D', s)
+    p.apply('D', s)
+    p.apply('L', s)
+
+    p.initialState = State(s)
+
+
+### Uncomment for testing solution
+
+    print('=== Running BFS ===')
+    start_time = time.time()
+    res=search.BFS(p)
+    end_time = time.time()
+    print(end_time - start_time)
+    print(res)
+    print("Explored Nodes: " + str(Node.nodeCount) + "\n")
+    Node.nodeCount = 0
+
+    print('=== Running DFS ===')
+    start_time = time.time()
+    res = search.DFS(p)
+    end_time = time.time()
+    print(end_time - start_time)
+    print(res)
+    print("Explored Nodes: " + str(Node.nodeCount) + "\n")
+    Node.nodeCount = 0
+
+    print('=== Running Greedy ===')
+    start_time = time.time()
+    res = search.greedy(p)
+    end_time = time.time()
+    print(res)
+    print("Explored Nodes: " + str(Node.nodeCount) + "\n")
+    Node.nodeCount = 0
+
+    print('=== Running A* ===')
+    start_time = time.time()
+    res = search.A_star(p)
+    end_time = time.time()
+    print(res)
+    print("Explored Nodes: " + str(Node.nodeCount) + "\n")
+    Node.nodeCount = 0
+
+    print("Generating Random Position\n")
+    si = State(s)
+    applyRndMoves(30,si,p)
+    p.initialState = si
+    print(si)
+
+    print('=== Running BFS ===')
+    start_time = time.time()
+    #res=search.BFS(p)
+    end_time = time.time()
+    print(res)
+    print("Explored Nodes: " + str(Node.nodeCount) + "\n")
+    Node.nodeCount = 0
+
+    print('=== Runnning DFS ===')
+    start_time = time.time()
+    res = search.DFS(p)
+    end_time = time.time()
+    print(res)
+    print("Explored Nodes: " + str(Node.nodeCount) + "\n")
+    Node.nodeCount = 0
+
+    print('=== Running Greedy ===')
+    start_time = time.time()
+    res = search.greedy(p)
+    end_time = time.time()
+    print(res)
+    print("Explored Nodes: " + str(Node.nodeCount) + "\n")
+    Node.nodeCount = 0
+
+    print('=== Running A* ===')
+    start_time = time.time()
+    res = search.A_star(p)
+    end_time = time.time()
+    print(res)
+    print("Explored Nodes: " + str(Node.nodeCount) + "\n")
+    Node.nodeCount = 0
