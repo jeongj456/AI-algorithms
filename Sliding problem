@@ -1,0 +1,69 @@
+'''
+Nils Napp
+Sliding Problem for AI-Class
+'''
+
+import random
+
+class State:
+    """ State of sliding number puzzle
+        Contains array of values called 'board' to indicate
+        tile positions, and the position of tile '0', which
+        indicates the empty space on the board.         """
+
+    boardSize = 3
+
+    def __init__(self, s = None):
+
+        if s == None:
+
+            # tiles is an iterator holding numbers 0 to 9
+            tiles = range(self.boardSize * self.boardSize).__iter__()
+
+            # below line reads numbers 0-8 stored in tiles and store them in 2d array (list of lists)
+            self.board = [[next(tiles) for i in range(self.boardSize)] for j in range(self.boardSize)]
+
+            #keep track of empty position
+            self.position = [0,0]
+
+        else:
+            #copy the board
+            self.board = []
+            for row in s.board:
+                self.board.append(list(row))
+
+            #copy the positions
+            self.position = list(s.position)
+
+    # converts to readable string to print
+    def __str__(self):
+        rstr = ''
+        for row in self.board:
+            rstr += str(row) + '\n'
+        return rstr
+
+    #overload to allow comparison of lists and states with ==
+    def __eq__(self, other):
+        if isinstance(other, State):
+            return self.board == other.board
+        elif isinstance(other, list):
+            return self.board == other
+        else:
+            return NotImplemented
+
+    #turn into immutable ojbect for set lookup
+    def toTuple(self):
+        tpl = ()
+        for row in self.board:
+            tpl += (tuple(row),)
+        return tpl
+
+    #create board from a list or tuple
+    def setBoard(self, brd):
+        self.board = brd
+        for row in range(self.boardSize):
+            for col in range(self.boardSize):
+                if self.board[row][col] == 0:
+                    self.position = [row, col]
+                    return None
+        raise StandardError('Set board configuration does not have an empty spot!')
